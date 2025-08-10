@@ -47,12 +47,31 @@ export const reflect = async (
     }),
   };
 
-  const model = new ChatAnthropic({
-    model: "claude-3-5-sonnet-20240620",
-    temperature: 0,
-  }).bindTools([generateReflectionTool], {
-    tool_choice: "generate_reflections",
-  });
+  // 检查是否启用 New API
+  const useNewApi = process.env.USE_NEW_API === "true";
+  
+  let model;
+  if (useNewApi) {
+    // 使用 New API 的反思模型
+    const { initChatModel } = await import("langchain/chat_models/universal");
+    const baseModel = await initChatModel(process.env.NEW_API_REFLECTION_MODEL || "claude-3-5-sonnet", {
+      modelProvider: "openai",
+      apiKey: process.env.NEW_API_KEY,
+      baseUrl: process.env.NEW_API_BASE_URL,
+      temperature: 0,
+    });
+    model = baseModel.bindTools([generateReflectionTool], {
+      tool_choice: "generate_reflections",
+    });
+  } else {
+    // 使用传统的 Anthropic 直连
+    model = new ChatAnthropic({
+      model: "claude-3-5-sonnet-20240620",
+      temperature: 0,
+    }).bindTools([generateReflectionTool], {
+      tool_choice: "generate_reflections",
+    });
+  }
 
   const currentArtifactContent = state.artifact
     ? getArtifactContent(state.artifact)

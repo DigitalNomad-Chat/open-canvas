@@ -159,10 +159,44 @@ export const formatArtifactContentWithTemplate = (
   );
 };
 
+// New API 模型映射函数
+function getNewApiModelName(requestedModel: string, taskType?: string): string {
+  // 如果指定了任务类型，优先使用对应的专用模型
+  if (taskType) {
+    const taskModelMap: Record<string, string> = {
+      "title": process.env.NEW_API_TITLE_MODEL || "gpt-4o-mini",
+      "followup": process.env.NEW_API_FOLLOWUP_MODEL || "gpt-4o-mini",
+      "search_query": process.env.NEW_API_SEARCH_QUERY_MODEL || "claude-3-5-sonnet",
+      "search_classify": process.env.NEW_API_SEARCH_CLASSIFY_MODEL || "claude-3-5-sonnet",
+      "summary": process.env.NEW_API_SUMMARY_MODEL || "claude-3-5-sonnet",
+      "reflection": process.env.NEW_API_REFLECTION_MODEL || "claude-3-5-sonnet",
+      "url_analysis": process.env.NEW_API_URL_ANALYSIS_MODEL || "gemini-2.0-flash",
+      "multimodal": process.env.NEW_API_MULTIMODAL_MODEL || "gemini-2.0-flash",
+      "tool_fallback": process.env.NEW_API_TOOL_FALLBACK_MODEL || "gpt-4o",
+    };
+    
+    if (taskModelMap[taskType]) {
+      return taskModelMap[taskType];
+    }
+  }
+  
+  // 根据原始模型名映射到 New API 中的模型
+  const modelMapping: Record<string, string> = {
+    "gpt-4o": process.env.NEW_API_CONTENT_MODEL || "gpt-4o",
+    "gpt-4o-mini": process.env.NEW_API_TITLE_MODEL || "gpt-4o-mini",
+    "claude-3-5-sonnet-latest": process.env.NEW_API_SEARCH_QUERY_MODEL || "claude-3-5-sonnet",
+    "claude-3-5-sonnet-20240620": process.env.NEW_API_REFLECTION_MODEL || "claude-3-5-sonnet",
+    "gemini-2.0-flash": process.env.NEW_API_URL_ANALYSIS_MODEL || "gemini-2.0-flash",
+  };
+  
+  return modelMapping[requestedModel] || process.env.NEW_API_CONTENT_MODEL || requestedModel;
+}
+
 export const getModelConfig = (
   config: LangGraphRunnableConfig,
   extra?: {
     isToolCalling?: boolean;
+    taskType?: string;
   }
 ): {
   modelName: string;
@@ -182,6 +216,30 @@ export const getModelConfig = (
   if (!customModelName) throw new Error("Model name is missing in config.");
 
   const modelConfig = config.configurable?.modelConfig as CustomModelConfig;
+
+  // 检查是否启用 New API
+  const useNewApi = process.env.USE_NEW_API === "true";
+  
+  if (useNewApi) {
+    // 使用 New API 统一接口
+    let newApiModelName = getNewApiModelName(customModelName, extra?.taskType);
+    
+    // 工具调用兼容性处理
+    if (extra?.isToolCalling) {
+      // 如果当前模型不支持工具调用，使用备用模型
+      if (newApiModelName.includes("o1") || newApiModelName.includes("thinking")) {
+        newApiModelName = process.env.NEW_API_TOOL_FALLBACK_MODEL || "gpt-4o";
+      }
+    }
+    
+    return {
+      modelName: newApiModelName,
+      modelProvider: "openai", // New API 兼容 OpenAI 格式
+      apiKey: process.env.NEW_API_KEY,
+      baseUrl: process.env.NEW_API_BASE_URL,
+      modelConfig,
+    };
+  }
 
   if (customModelName.startsWith("azure/")) {
     let actualModelName = customModelName.replace("azure/", "");

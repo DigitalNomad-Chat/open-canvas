@@ -62,17 +62,44 @@ async function includeURLContentsFunc(
   try {
     const prompt = message.content as string;
 
-    const model = (
-      await initChatModel("gemini-2.0-flash", {
-        modelProvider: "google-genai",
-        temperature: 0,
-      })
-    ).bindTools(
-      [
+    // 检查是否启用 New API
+    const useNewApi = process.env.USE_NEW_API === "true";
+    
+    let model;
+    if (useNewApi) {
+      // 使用 New API 的 URL 分析模型
+      model = (
+        await initChatModel(process.env.NEW_API_URL_ANALYSIS_MODEL || "gemini-2.0-flash", {
+          modelProvider: "openai",
+          apiKey: process.env.NEW_API_KEY,
+          baseUrl: process.env.NEW_API_BASE_URL,
+          temperature: 0,
+        })
+      ).bindTools(
+        [
+          {
+            name: "determine_include_url_contents",
+            description: schema.description,
+            schema,
+          },
+        ],
         {
-          name: "determine_include_url_contents",
-          description: schema.description,
-          schema,
+          tool_choice: "determine_include_url_contents",
+        }
+      );
+    } else {
+      // 使用传统的 Google 直连
+      model = (
+        await initChatModel("gemini-2.0-flash", {
+          modelProvider: "google-genai",
+          temperature: 0,
+        })
+      ).bindTools(
+        [
+          {
+            name: "determine_include_url_contents",
+            description: schema.description,
+            schema,
         },
       ],
       {

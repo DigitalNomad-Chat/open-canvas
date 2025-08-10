@@ -25,9 +25,24 @@ Ensure you include ALL of the following messages in the summary. Do NOT follow a
 export async function summarizer(
   state: SummarizeState
 ): Promise<Partial<SummarizeState>> {
-  const model = new ChatAnthropic({
-    model: "claude-3-5-sonnet-latest",
-  });
+  // 检查是否启用 New API
+  const useNewApi = process.env.USE_NEW_API === "true";
+  
+  let model;
+  if (useNewApi) {
+    // 使用 New API 的摘要模型
+    const { initChatModel } = await import("langchain/chat_models/universal");
+    model = await initChatModel(process.env.NEW_API_SUMMARY_MODEL || "claude-3-5-sonnet", {
+      modelProvider: "openai",
+      apiKey: process.env.NEW_API_KEY,
+      baseUrl: process.env.NEW_API_BASE_URL,
+    });
+  } else {
+    // 使用传统的 Anthropic 直连
+    model = new ChatAnthropic({
+      model: "claude-3-5-sonnet-latest",
+    });
+  }
 
   const messagesToSummarize = formatMessages(state.messages);
 

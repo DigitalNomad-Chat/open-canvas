@@ -34,12 +34,31 @@ export const generateTitle = async (
     }),
   };
 
-  const model = new ChatOpenAI({
-    model: "gpt-4o-mini",
-    temperature: 0,
-  }).bindTools([generateTitleTool], {
-    tool_choice: "generate_title",
-  });
+  // 检查是否启用 New API
+  const useNewApi = process.env.USE_NEW_API === "true";
+  
+  let model;
+  if (useNewApi) {
+    // 使用 New API 的标题生成模型
+    const { initChatModel } = await import("langchain/chat_models/universal");
+    const baseModel = await initChatModel(process.env.NEW_API_TITLE_MODEL || "gpt-4o-mini", {
+      modelProvider: "openai",
+      apiKey: process.env.NEW_API_KEY,
+      baseUrl: process.env.NEW_API_BASE_URL,
+      temperature: 0,
+    });
+    model = baseModel.bindTools([generateTitleTool], {
+      tool_choice: "generate_title",
+    });
+  } else {
+    // 使用传统的 OpenAI 直连
+    model = new ChatOpenAI({
+      model: "gpt-4o-mini",
+      temperature: 0,
+    }).bindTools([generateTitleTool], {
+      tool_choice: "generate_title",
+    });
+  }
 
   const currentArtifactContent = state.artifact
     ? getArtifactContent(state.artifact)
